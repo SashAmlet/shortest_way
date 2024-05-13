@@ -9,8 +9,6 @@ from matplotlib.lines import Line2D
 import math
 from shapely.wkt import loads
 
-random.seed(42)
-
 def generate_random_points(n, x_range, y_range):
     """Генерация списка случайных точек."""
     return [Point(random.uniform(*x_range), random.uniform(*y_range)) for _ in range(n)]
@@ -194,25 +192,18 @@ def SplitLine(polygons, line, position, step=1):
     intersecting_polygons = find_intersecting_polygons(polygons, segment)
     closest_polygon = find_closest_polygon(intersecting_polygons, start_point)
 
-    while closest_polygon is not None:
+    if closest_polygon is not None:
         #draw_polygons([closest_polygon], line)
         p1, p2 = find_edge_points(closest_polygon, segment)
         print(f"\n\nEdge Points:\n{p1}, {p2}")
 
         coords.insert(position+1, p1)
-        
-        intr_polygons = find_intersecting_polygons(polygons, LineString([start_point, p1]))
-        
-        closst_polygon = find_closest_polygon(intr_polygons, start_point)
+
         line = LineString(coords)
         #draw_polygons(polygons, line)
-        if closst_polygon is not None:
-            line = SplitLine(polygons, line, position)
+        line = SplitLine(polygons, line, position)
         
-        line = SplitLine(polygons, line, position+step)
         
-        break
-
     if position + 1 != len(line.coords) - 1:
         line = SplitLine(polygons, line, position+step)
 
@@ -243,7 +234,7 @@ line = LineString([A, B])
 
 points = generate_random_points(n, x_range, y_range)
 
-polygons = read_polygons_from_file('polygon.txt')#cluster_points_to_polygons(points, h)#
+polygons = cluster_points_to_polygons(points, h)#read_polygons_from_file('polygon.txt')
 
 
 
