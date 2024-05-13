@@ -58,18 +58,13 @@ def draw_polygons(polygons, line=None):
 
 def find_intersecting_polygons(polygons, line):
     """Определить все полигоны, которые пересекает прямая AB."""
-    return [polygon for polygon in polygons if line.intersects(polygon)]
+    return [polygon for polygon in polygons if line.crosses(polygon)]
 
-# def find_intersecting_polygons(polygons, line):
-#     """Определить все полигоны, которые пересекает прямая AB, исключая те, в которых начинается или заканчивается линия."""
-#     intersecting_polygons = []
-#     for polygon in polygons:
-#         # Проверяем, что линия пересекает полигон
-#         if line.intersects(polygon):
-#             # Проверяем, что начальная и конечная точки линии не лежат внутри полигона
-#             if not (polygon.contains(Point(line.coords[0])) or polygon.contains(Point(line.coords[-1]))):
-#                 intersecting_polygons.append(polygon)
-#     return intersecting_polygons
+def find_closest_polygon(polygons, point):
+    """Определить самый близкий полигон к заданной точке."""
+    return min(polygons, 
+                key=lambda polygon: point.distance(polygon),
+                default=None)
 
 
 def vector(p0,p1):
@@ -107,12 +102,23 @@ def find_edge_points(polygon, line):
         return None
     
     # Если нормаль сегмента сонаправлена с вектором прямой => скалярное умножение >=0 => данный сегмент дальний
-    segment0_vector = vector(intersecting_segments[0].coords[0], intersecting_segments[0].coords[1])
-    segment0_norm_vector = norm(segment0_vector)
-    if dot_product(segment0_norm_vector, line_vector) < 0:
-        first_segment = intersecting_segments[0]
-    else:
-        first_segment = intersecting_segments[1]
+
+    first_segment = None
+    # Цикл по всем пересекающимся сегментам
+    for segment in intersecting_segments:
+        # Вычисляем вектор сегмента
+        segment_vector = vector(segment.coords[0], segment.coords[1])
+        # Нормализуем вектор сегмента
+        segment_norm_vector = norm(segment_vector)
+        # Проверяем условие
+        if dot_product(segment_norm_vector, line_vector) < 0:
+            first_segment = segment
+            break
+
+    # Проверяем, был ли найден первый сегмент
+    if first_segment is None:
+        raise ValueError("Не найден подходящий сегмент")
+
 
     # Задаем точку начала обхода
     start0_point = first_segment.coords[0]
@@ -177,52 +183,44 @@ def read_polygons_from_file(file_name):
                 polygons.append(polygon)
     return polygons
 
-def SplitLine(polygons, line, position):
-    draw_polygons(polygons, line)
+def SplitLine(polygons, line, position, step=1):
+    #draw_polygons(polygons, line)
     
     coords = list(line.coords)
+    
+    start_point = Point(coords[position])
+    segment = LineString(coords[position:position+2])
 
-    start_point = coords[position]
-    start_point = Point(start_point)
-
-    last_piece = LineString(coords[-2:])
-    intersecting_polygons = find_intersecting_polygons(polygons, last_piece)
-
-    # closest_polygon = min(intersecting_polygons, key=lambda polygon: start_point.distance(polygon))
-    closest_polygon = min(
-        (polygon for polygon in intersecting_polygons if start_point.distance(polygon) > 0),
-        key=lambda polygon: start_point.distance(polygon),
-        default=None
-    )
-    draw_polygons([closest_polygon], line)
+    intersecting_polygons = find_intersecting_polygons(polygons, segment)
+    closest_polygon = find_closest_polygon(intersecting_polygons, start_point)
 
     while closest_polygon is not None:
-        try:
-            p1, p2 = find_edge_points(closest_polygon, last_piece)
-            print(f"\n\nEdge Points:\n{p1}, {p2}")
-        except Exception as e:
-            save_polygons_to_txt(polygons, 'polygon.txt')
+        #draw_polygons([closest_polygon], line)
+        p1, p2 = find_edge_points(closest_polygon, segment)
+        print(f"\n\nEdge Points:\n{p1}, {p2}")
 
-
-        # coords.insert(position+1, p1)
-        # new_line = LineString([p1, coords[position]])
-        # intr_polygons = find_intersecting_polygons(polygons, new_line)
-        # _p1 = Point(p1)
-        # closst_polygon = min(
-        #     (polygon for polygon in intr_polygons if _p1.distance(polygon) > 0),
-        #     key=lambda polygon: _p1.distance(polygon),
-        #     default=None
-        # )
-        # if closst_polygon is None:
-        #     line = SplitLine(polygons, LineString(coords), position+1)
-        # else:
-        #     line = SplitLine(polygons, LineString(coords), position)
         coords.insert(position+1, p1)
-        line = SplitLine(polygons, LineString(coords), position+1)
+        
+        intr_polygons = find_intersecting_polygons(polygons, LineString([start_point, p1]))
+        
+        closst_polygon = find_closest_polygon(intr_polygons, start_point)
+        line = LineString(coords)
+        #draw_polygons(polygons, line)
+        if closst_polygon is not None:
+            line = SplitLine(polygons, line, position)
+        
+        line = SplitLine(polygons, line, position+step)
+        
         break
+
+    if position + 1 != len(line.coords) - 1:
+        line = SplitLine(polygons, line, position+step)
 
     
     return line
+
+
+
 
 
 
