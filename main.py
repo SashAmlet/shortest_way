@@ -236,26 +236,22 @@ def SplitLine(polygons, line, position, side=None, polygon=None):
         #print(f"\n\nEdge Points:\n{p[0]}, {p[1]}")
 
         if polygon != closest_polygon:
-            side = None
+            cond = (0, 2)
+        elif side == 0:
+            cond = (0, 1)
+        elif side == 1:
+            cond = (1, 2)
 
-        if side is None:
-            for i in range(2):
+        for i in range(*cond):
+            if polygon != closest_polygon:
                 reached = False
-                new_coords = coords.copy()
-
-                new_coords.insert(position+1, p[i])
-
-                line = LineString(new_coords)
-                #draw_polygons(polygons, [line])
-                line = SplitLine(polygons, line, position, i, closest_polygon)
-        else:
             new_coords = coords.copy()
 
-            new_coords.insert(position+1, p[side])
+            new_coords.insert(position+1, p[i])
 
             line = LineString(new_coords)
-            #draw_polygons(polygons, [line])
-            line = SplitLine(polygons, line, position, side, polygon)
+            draw_polygons(polygons, [line])
+            line = SplitLine(polygons, line, position, i, closest_polygon)
         
     #draw_polygons(polygons, [line])    
     if position + 1 != len(line.coords) - 1 and not reached:
@@ -296,8 +292,8 @@ def simplify_linestring(polygons, linestring):
 
 
 # Initialization
-n = 10000  # Количество точек
-h = 100    # Количество полигонов
+n = 100  # Количество точек
+h = 10    # Количество полигонов
 x_range = (0, 100)  # Диапазон по оси X
 y_range = (0, 100)  # Диапазон по оси Y
 
@@ -312,10 +308,10 @@ line = LineString([A, B])
 points = generate_random_points(n, x_range, y_range)
 
 reached = False
-polygons = read_polygons_from_file('polygon1.txt')#cluster_points_to_polygons(points, h)#read_polygons_from_file('polygon.txt')#
+polygons = read_polygons_from_file('polygon.txt')#cluster_points_to_polygons(points, h)#
 
 
-draw_polygon(polygons)
+# draw_polygon(polygons)
 
 G = nx.Graph()
 splitLines = []
