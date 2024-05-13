@@ -6,8 +6,8 @@ from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.lines import Line2D
-import math
 from shapely.wkt import loads
+import networkx as nx
 
 def generate_random_points(n, x_range, y_range):
     """Генерация списка случайных точек."""
@@ -35,7 +35,31 @@ def cluster_points_to_polygons(points, h):
 
     return polygons
 
-def draw_polygons(polygons, line=None):
+def draw_polygons(polygons, lines=None):
+    """Отрисовка полигонов на графике."""
+    fig, ax = plt.subplots()
+    for polygon in polygons:
+        # Преобразование объекта Polygon Shapely в список координат для matplotlib
+        mpl_polygon = MplPolygon(list(polygon.exterior.coords), closed=True, fill=None, edgecolor='r')
+        ax.add_patch(mpl_polygon)
+
+    # Если заданы координаты начала и конца линии, рисуем красную прямую
+    # if line:
+    #     x_coords, y_coords = line.xy
+    #     line2D = Line2D(x_coords, y_coords, color='b')
+    #     ax.add_line(line2D)
+    if lines:
+        for line in lines:
+            x_coords, y_coords = line.xy
+            line2D = Line2D(x_coords, y_coords, color='b')
+            ax.add_line(line2D)
+
+
+    plt.xlim(x_range[0] - 50, x_range[1] + 50)  # Установка пределов оси X
+    plt.ylim(y_range[0] - 50, y_range[1] + 50)  # Установка пределов оси Y
+    plt.show()
+
+def draw_polygon(polygons, line=None):
     """Отрисовка полигонов на графике."""
     fig, ax = plt.subplots()
     for polygon in polygons:
@@ -48,15 +72,27 @@ def draw_polygons(polygons, line=None):
         x_coords, y_coords = line.xy
         line2D = Line2D(x_coords, y_coords, color='b')
         ax.add_line(line2D)
+    # if lines:
+    #     for line in lines:
+    #         x_coords, y_coords = line.xy
+    #         line2D = Line2D(x_coords, y_coords, color='b')
+    #         ax.add_line(line2D)
+
 
     plt.xlim(x_range[0] - 50, x_range[1] + 50)  # Установка пределов оси X
     plt.ylim(y_range[0] - 50, y_range[1] + 50)  # Установка пределов оси Y
     plt.show()
 
 
+# def find_intersecting_polygons(polygons, line):
+#     """Определить все полигоны, которые пересекает прямая AB."""
+#     return [polygon for polygon in polygons if line.crosses(polygon)]
+
 def find_intersecting_polygons(polygons, line):
     """Определить все полигоны, которые пересекает прямая AB."""
-    return [polygon for polygon in polygons if line.crosses(polygon)]
+    return [polygon for polygon in polygons if line.crosses(polygon) or line.within(polygon)]
+
+
 
 def find_closest_polygon(polygons, point):
     """Определить самый близкий полигон к заданной точке."""
@@ -129,10 +165,10 @@ def find_edge_points(polygon, line):
     edge_points = []
     if (start0_index and start1_index) is not None:
         # Обход многоугольника по часовой стрелке от заданной точки
-        print("Walking clockwise from the point", start0_point)
+        #print("Walking clockwise from the point", start0_point)
         for i in range(start0_index-1, start0_index - len(coords), -1):
             new_point = coords[i % len(coords)]
-            print(new_point)
+            #print(new_point)
             s0_vector = vector(new_point, start0_point)
             s0_norm_vector = norm(s0_vector)
             # если угол между прямой и нормалью сегмента <= 90 градусов => скалярное умножение >=0 => start0_point - угловая слева
@@ -143,10 +179,10 @@ def find_edge_points(polygon, line):
                 start0_point = new_point
 
         # Обход многоугольника против часовой стрелки от заданной точки
-        print("Walking counterclockwise from the point", start1_point)
+        #print("Walking counterclockwise from the point", start1_point)
         for i in range(start1_index+1, start1_index + len(coords)):
             new_point = coords[i % len(coords)]
-            print(new_point)
+            #print(new_point)
             s1_vector = vector(start1_point, new_point)
             s1_norm_vector = norm(s1_vector)
             # если угол между прямой и нормалью сегмента <= 90 градусов => скалярное умножение >=0 => start1_point - угловая справа
@@ -181,46 +217,87 @@ def read_polygons_from_file(file_name):
                 polygons.append(polygon)
     return polygons
 
-def SplitLine(polygons, line, position, step=1):
+
+def SplitLine(polygons, line, position, side=None, polygon=None):
+    global reached, splitLines
     #draw_polygons(polygons, line)
     
     coords = list(line.coords)
     
     start_point = Point(coords[position])
     segment = LineString(coords[position:position+2])
-
+    
     intersecting_polygons = find_intersecting_polygons(polygons, segment)
     closest_polygon = find_closest_polygon(intersecting_polygons, start_point)
 
     if closest_polygon is not None:
-        #draw_polygons([closest_polygon], line)
-        p1, p2 = find_edge_points(closest_polygon, segment)
-        print(f"\n\nEdge Points:\n{p1}, {p2}")
+        #draw_polygons([closest_polygon], [line])
+        p = find_edge_points(closest_polygon, segment)
+        #print(f"\n\nEdge Points:\n{p[0]}, {p[1]}")
 
-        coords.insert(position+1, p1)
+        if polygon != closest_polygon:
+            side = None
 
-        line = LineString(coords)
-        #draw_polygons(polygons, line)
-        line = SplitLine(polygons, line, position)
+        if side is None:
+            for i in range(2):
+                reached = False
+                new_coords = coords.copy()
+
+                new_coords.insert(position+1, p[i])
+
+                line = LineString(new_coords)
+                #draw_polygons(polygons, [line])
+                line = SplitLine(polygons, line, position, i, closest_polygon)
+        else:
+            new_coords = coords.copy()
+
+            new_coords.insert(position+1, p[side])
+
+            line = LineString(new_coords)
+            #draw_polygons(polygons, [line])
+            line = SplitLine(polygons, line, position, side, polygon)
         
-        
-    if position + 1 != len(line.coords) - 1:
-        line = SplitLine(polygons, line, position+step)
-
-    
+    #draw_polygons(polygons, [line])    
+    if position + 1 != len(line.coords) - 1 and not reached:
+        line = SplitLine(polygons, line, position+1, side, polygon)
+    if not reached:
+        splitLines.append(line)
+        reached = True
     return line
 
 
 
 
+def can_remove_point(polygons, line, index):
+    # Создаем линию из первой и третьей точек
+    new_line = LineString([line.coords[index], line.coords[index + 2]])
+    # Проверяем пересечение с каждым полигоном
+    for poly in polygons:
+        if new_line.intersects(poly):
+            return False
+    return True
+
+def simplify_linestring(polygons, linestring):
+    coords = list(linestring.coords)
+    i = 0
+    while i < len(coords) - 2:
+        # Проверяем, можно ли удалить вторую точку
+        if can_remove_point(polygons, linestring, i):
+            # Удаляем вторую точку
+            del coords[i + 1]
+            # Не увеличиваем i, так как следующая точка стала второй
+        else:
+            # Переходим к следующей тройке точек
+            i += 1
+    return LineString(coords)
 
 
 
 
 
 # Initialization
-n = 100  # Количество точек
-h = 10    # Количество полигонов
+n = 10000  # Количество точек
+h = 100    # Количество полигонов
 x_range = (0, 100)  # Диапазон по оси X
 y_range = (0, 100)  # Диапазон по оси Y
 
@@ -234,13 +311,17 @@ line = LineString([A, B])
 
 points = generate_random_points(n, x_range, y_range)
 
-polygons = cluster_points_to_polygons(points, h)#read_polygons_from_file('polygon.txt')
+reached = False
+polygons = read_polygons_from_file('polygon1.txt')#cluster_points_to_polygons(points, h)#read_polygons_from_file('polygon.txt')#
 
 
+draw_polygon(polygons)
 
+G = nx.Graph()
+splitLines = []
 splitLine = SplitLine(polygons, line, 0)
 
-
+shortest_line = min(splitLines, key=lambda line: line.length)
 
 #closest_polygon = min(polygons, key=lambda polygon: start_point.distance(polygon))
 
@@ -257,6 +338,9 @@ splitLine = SplitLine(polygons, line, 0)
 
 
 
+# for line in splitLines:
+#     draw_polygon(polygons, line)
 
-draw_polygons(polygons, splitLine)
+# draw_polygons(polygons, splitLines)
+draw_polygon(polygons, shortest_line)
 #save_polygons_to_txt(polygons, 'polygon.txt')
