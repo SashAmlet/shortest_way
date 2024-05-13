@@ -218,7 +218,7 @@ def read_polygons_from_file(file_name):
     return polygons
 
 
-def SplitLine(polygons, line, position, side=None, polygon=None):
+def SplitLine(polygons, line, position, visited_polygons=[]):
     global reached, splitLines
     #draw_polygons(polygons, line)
     
@@ -235,27 +235,36 @@ def SplitLine(polygons, line, position, side=None, polygon=None):
         p = find_edge_points(closest_polygon, segment)
         #print(f"\n\nEdge Points:\n{p[0]}, {p[1]}")
 
-        if polygon != closest_polygon:
+        if not any(_polygon == closest_polygon for _polygon, i in visited_polygons):
             cond = (0, 2)
-        elif side == 0:
-            cond = (0, 1)
-        elif side == 1:
-            cond = (1, 2)
+        else:
+            side = [i for _polygon, i in visited_polygons if _polygon == closest_polygon]
+            cond = (side[0], side[0]+1)
 
         for i in range(*cond):
-            if polygon != closest_polygon:
+            if closest_polygon not in visited_polygons:
                 reached = False
             new_coords = coords.copy()
 
             new_coords.insert(position+1, p[i])
 
             line = LineString(new_coords)
-            draw_polygons(polygons, [line])
-            line = SplitLine(polygons, line, position, i, closest_polygon)
+            #draw_polygons(polygons, [line])
+
+            index = next((index for index, (p, _) in enumerate(visited_polygons) if p == closest_polygon), None)
+
+            # Если кортеж найден, обновляем его значение i
+            if index is not None:
+                visited_polygons[index] = (closest_polygon, i)
+            else:
+                # Если кортеж не найден, добавляем новый кортеж
+                visited_polygons.append((closest_polygon, i))
+
+            line = SplitLine(polygons, line, position, visited_polygons)
         
     #draw_polygons(polygons, [line])    
     if position + 1 != len(line.coords) - 1 and not reached:
-        line = SplitLine(polygons, line, position+1, side, polygon)
+        line = SplitLine(polygons, line, position+1, visited_polygons)
     if not reached:
         splitLines.append(line)
         reached = True
@@ -292,13 +301,13 @@ def simplify_linestring(polygons, linestring):
 
 
 # Initialization
-n = 100  # Количество точек
-h = 10    # Количество полигонов
-x_range = (0, 100)  # Диапазон по оси X
-y_range = (0, 100)  # Диапазон по оси Y
+n = 10000  # Количество точек
+h = 100    # Количество полигонов
+x_range = (0, 10000)  # Диапазон по оси X
+y_range = (0, 10000)  # Диапазон по оси Y
 
 A = Point(-10, -10)
-B = Point(110, 110)
+B = Point(10010, 10010)
 line = LineString([A, B])
 
 
@@ -308,10 +317,10 @@ line = LineString([A, B])
 points = generate_random_points(n, x_range, y_range)
 
 reached = False
-polygons = read_polygons_from_file('polygon.txt')#cluster_points_to_polygons(points, h)#
+polygons = cluster_points_to_polygons(points, h)#read_polygons_from_file('polygon.txt')#
 
 
-# draw_polygon(polygons)
+draw_polygon(polygons)
 
 G = nx.Graph()
 splitLines = []
