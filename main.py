@@ -1,94 +1,15 @@
 from shapely.geometry import Point, Polygon, LineString
-import random
-from sklearn.cluster import KMeans
-import numpy as np
-from scipy.spatial import ConvexHull
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon as MplPolygon
-from matplotlib.lines import Line2D
-from shapely.wkt import loads
-import networkx as nx
+
 import time
 
-def generate_random_points(n, x_range, y_range):
-    """Генерация списка случайных точек."""
-    return [Point(random.uniform(*x_range), random.uniform(*y_range)) for _ in range(n)]
-
-def cluster_points_to_polygons(points, h):
-    """Кластеризация точек и создание полигонов."""
-    # Преобразование списка объектов Point в массив для KMeans
-    points_array = np.array([[point.x, point.y] for point in points])
-    
-    # Кластеризация точек
-    kmeans = KMeans(n_clusters=h)
-    clusters = kmeans.fit_predict(points_array)
-
-    # Создание полигонов
-    polygons = []
-    for i in range(h):
-        # Выборка точек текущего кластера
-        cluster_points = points_array[clusters == i]
-        if len(cluster_points) < 3:
-            continue  # Необходимо минимум 3 точки для создания полигона
-        hull = ConvexHull(cluster_points)
-        # Создание полигона из выпуклой оболочки точек кластера
-        polygons.append(Polygon(cluster_points[hull.vertices]))
-
-    return polygons
-
-def draw_polygons(polygons, lines=None):
-    """Отрисовка полигонов на графике."""
-    fig, ax = plt.subplots()
-    for polygon in polygons:
-        # Преобразование объекта Polygon Shapely в список координат для matplotlib
-        mpl_polygon = MplPolygon(list(polygon.exterior.coords), closed=True, fill=None, edgecolor='r')
-        ax.add_patch(mpl_polygon)
-
-    # Если заданы координаты начала и конца линии, рисуем красную прямую
-    # if line:
-    #     x_coords, y_coords = line.xy
-    #     line2D = Line2D(x_coords, y_coords, color='b')
-    #     ax.add_line(line2D)
-    if lines:
-        for line in lines:
-            x_coords, y_coords = line.xy
-            line2D = Line2D(x_coords, y_coords, color='b')
-            ax.add_line(line2D)
+from Helper import Random, Painter, File
 
 
-    plt.xlim(x_range[0] - 50, x_range[1] + 50)  # Установка пределов оси X
-    plt.ylim(y_range[0] - 50, y_range[1] + 50)  # Установка пределов оси Y
-    plt.show()
 
-def draw_polygon(polygons, line=None):
-    """Отрисовка полигонов на графике."""
-    fig, ax = plt.subplots()
-    for polygon in polygons:
-        # Преобразование объекта Polygon Shapely в список координат для matplotlib
-        mpl_polygon = MplPolygon(list(polygon.exterior.coords), closed=True, fill=None, edgecolor='r')
-        ax.add_patch(mpl_polygon)
-
-    # Если заданы координаты начала и конца линии, рисуем красную прямую
-    if line:
-        x_coords, y_coords = line.xy
-        line2D = Line2D(x_coords, y_coords, color='b')
-        ax.add_line(line2D)
-    # if lines:
-    #     for line in lines:
-    #         x_coords, y_coords = line.xy
-    #         line2D = Line2D(x_coords, y_coords, color='b')
-    #         ax.add_line(line2D)
-
-
-    plt.xlim(x_range[0] - 50, x_range[1] + 50)  # Установка пределов оси X
-    plt.ylim(y_range[0] - 50, y_range[1] + 50)  # Установка пределов оси Y
-    plt.show()
 
 def find_intersecting_polygons(polygons, line):
     """Определить все полигоны, которые пересекает прямая AB."""
     return [polygon for polygon in polygons if line.crosses(polygon) or line.within(polygon)]
-
-
 
 def find_closest_polygon(polygons, point):
     """Определить самый близкий полигон к заданной точке."""
@@ -192,26 +113,7 @@ def find_edge_points(polygon, line):
     return edge_points
 
 
-def save_polygons_to_txt(polygons, file_name):
-    # Открываем файл для записи
-    with open(file_name, 'w') as file:
-        # Перебираем все многоугольники в списке
-        for polygon in polygons:
-            # Получаем WKT представление каждого Polygon
-            wkt_representation = polygon.wkt
-            # Записываем WKT в файл, добавляя перевод строки после каждого
-            file.write(wkt_representation + '\n')
 
-def read_polygons_from_file(file_name):
-    polygons = []
-    with open(file_name, 'r') as file:
-        for line in file:
-            # Пропускаем пустые строки
-            if line.strip():
-                # Преобразуем строку WKT в объект Polygon и добавляем в список
-                polygon = loads(line)
-                polygons.append(polygon)
-    return polygons
 
 
 def find_min_max(polygons, line):
@@ -313,62 +215,60 @@ def SplitLine(polygons, line, position, visited_polygons=[]):
 
 
 
+if __name__ == "__main__":
+    # Initialization
+    n = 1000  # Количество точек
+    h = 100    # Количество полигонов
+    x_range = (0, 1000)  # Диапазон по оси X
+    y_range = (0, 1000)  # Диапазон по оси Y
 
-# Initialization
-n = 1000  # Количество точек
-h = 100    # Количество полигонов
-x_range = (0, 1000)  # Диапазон по оси X
-y_range = (0, 1000)  # Диапазон по оси Y
-
-A = Point(-10, 800)
-B = Point(1010, 1010)
-global_line = LineString([A, B])
-
-
+    A = Point(-10, 800)
+    B = Point(1010, 1010)
+    global_line = LineString([A, B])
 
 
-# Main part
-
-points = generate_random_points(n, x_range, y_range)
-
-reached = False
-
-############################
-start_time = time.time()
-polygons = read_polygons_from_file('polygon.txt')#cluster_points_to_polygons(points, h)#
-#save_polygons_to_txt(polygons, 'polygon.txt')
-end_time = time.time()
-
-execution_time = end_time - start_time
-print(f"Polygons are built in: {execution_time} seconds")
-###########################
-draw_polygon(polygons, global_line)
-
-maxes = find_min_max(polygons, global_line)
-
-splitLines = []
-###########################
-start_time = time.time()
-splitLine = SplitLine(polygons, global_line, 0)
-end_time = time.time()
-
-execution_time = end_time - start_time
-print(f"Paths are found in: {execution_time} seconds")
-###########################
-start_time = time.time()
-shortest_line = min(splitLines, key=lambda line: line.length)
-end_time = time.time()
-
-execution_time = end_time - start_time
-print(f"The shortest path is found in: {execution_time} seconds")
-###########################
-#closest_polygon = min(polygons, key=lambda polygon: start_point.distance(polygon))
-
-#draw_polygons([closest_polygon], line)
-
-#p1, p2 = find_edge_points(closest_polygon, line)
 
 
+    # Main part
+
+    points = Random.generate_random_points(n, x_range, y_range)
+
+    reached = False
+
+    ############################
+    start_time = time.time()
+    polygons = File.read_polygons_from_file('polygon.txt')#Random.cluster_points_to_polygons(points, h)#
+    #File.save_polygons_to_file(polygons, 'polygon.txt')
+    end_time = time.time()
+
+    execution_time = end_time - start_time
+    print(f"Polygons are built in: {execution_time} seconds")
+    ###########################
+    Painter.draw_polygons(polygons, x_range, y_range, global_line)
+
+    maxes = find_min_max(polygons, global_line)
+
+    splitLines = []
+    ###########################
+    start_time = time.time()
+    splitLine = SplitLine(polygons, global_line, 0)
+    end_time = time.time()
+
+    execution_time = end_time - start_time
+    print(f"Paths are found in: {execution_time} seconds")
+    ###########################
+    start_time = time.time()
+    shortest_line = min(splitLines, key=lambda line: line.length)
+    end_time = time.time()
+
+    execution_time = end_time - start_time
+    print(f"The shortest path is found in: {execution_time} seconds")
+    ###########################
+    #closest_polygon = min(polygons, key=lambda polygon: start_point.distance(polygon))
+
+    #draw_polygons([closest_polygon], line)
+
+    #p1, p2 = find_edge_points(closest_polygon, line)
 
 
 
@@ -377,9 +277,11 @@ print(f"The shortest path is found in: {execution_time} seconds")
 
 
 
-# for line in splitLines:
-#     draw_polygon(polygons, line)
 
-# draw_polygons(polygons, splitLines)
-draw_polygon(polygons, shortest_line)
-#save_polygons_to_txt(polygons, 'polygon.txt')
+
+    # for line in splitLines:
+    #     draw_polygon(polygons, line)
+
+    #Painter.draw_polygons(polygons, x_range, y_range, splitLines)
+    Painter.draw_polygons(polygons, x_range, y_range, shortest_line)
+    #save_polygons_to_txt(polygons, 'polygon.txt')
