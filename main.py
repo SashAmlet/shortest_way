@@ -214,6 +214,21 @@ def read_polygons_from_file(file_name):
     return polygons
 
 
+def find_min_max(polygons, line):
+    intersecting_polygons = find_intersecting_polygons(polygons, line)
+
+    l_distances = []
+    r_distances = []
+    
+    for _pol in intersecting_polygons:
+        p = find_edge_points(_pol, line)
+        l_distances.append(line.distance(Point(p[0])))
+        r_distances.append(line.distance(Point(p[1])))
+
+
+    return (2*max(l_distances), 2*max(r_distances))
+
+
 def to_optimize(coords, position, polygons, count):
     if position > 0:
         prev_point = Point(coords[position-1])
@@ -231,7 +246,7 @@ def to_optimize(coords, position, polygons, count):
     return (coords, count)
 
 def SplitLine(polygons, line, position, visited_polygons=[]):
-    global reached, splitLines
+    global reached, splitLines, global_line, maxes
     #draw_polygons(polygons, line)
     
     coords = list(line.coords)
@@ -256,6 +271,8 @@ def SplitLine(polygons, line, position, visited_polygons=[]):
             cond = (side[0], side[0]+1)
 
         for i in range(*cond):
+            if global_line.distance(Point(p[i])) > maxes[i]:
+                continue
             #if not any(_polygon == closest_polygon for _polygon, i in visited_polygons):
             reached = False
             new_coords = coords.copy()
@@ -263,7 +280,7 @@ def SplitLine(polygons, line, position, visited_polygons=[]):
             new_coords.insert(position+1, p[i])
 
             line = LineString(new_coords)
-            draw_polygons(polygons, [line])
+            # draw_polygons(polygons, [line])
 
             index = next((index for index, (p, _) in enumerate(vpolygons) if p == closest_polygon), None)
 
@@ -280,8 +297,8 @@ def SplitLine(polygons, line, position, visited_polygons=[]):
         (new_coords, count) = to_optimize(coords, position, polygons, 0)
         line = LineString(new_coords)
         position = position-count
-        if count > 0:
-            draw_polygons(polygons, [line])
+        # if count > 0:
+        #     draw_polygons(polygons, [line])
 
 
 
@@ -303,9 +320,10 @@ h = 100    # Количество полигонов
 x_range = (0, 1000)  # Диапазон по оси X
 y_range = (0, 1000)  # Диапазон по оси Y
 
-A = Point(-10, -10)
+A = Point(-10, 800)
 B = Point(1010, 1010)
-line = LineString([A, B])
+global_line = LineString([A, B])
+
 
 
 
@@ -324,13 +342,14 @@ end_time = time.time()
 execution_time = end_time - start_time
 print(f"Polygons are built in: {execution_time} seconds")
 ###########################
-draw_polygon(polygons, line)
+draw_polygon(polygons, global_line)
 
-G = nx.Graph()
+maxes = find_min_max(polygons, global_line)
+
 splitLines = []
 ###########################
 start_time = time.time()
-splitLine = SplitLine(polygons, line, 0)
+splitLine = SplitLine(polygons, global_line, 0)
 end_time = time.time()
 
 execution_time = end_time - start_time
