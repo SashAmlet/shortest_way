@@ -8,6 +8,7 @@ from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.lines import Line2D
 from shapely.wkt import loads
 import networkx as nx
+import time
 
 def generate_random_points(n, x_range, y_range):
     """Генерация списка случайных точек."""
@@ -82,11 +83,6 @@ def draw_polygon(polygons, line=None):
     plt.xlim(x_range[0] - 50, x_range[1] + 50)  # Установка пределов оси X
     plt.ylim(y_range[0] - 50, y_range[1] + 50)  # Установка пределов оси Y
     plt.show()
-
-
-# def find_intersecting_polygons(polygons, line):
-#     """Определить все полигоны, которые пересекает прямая AB."""
-#     return [polygon for polygon in polygons if line.crosses(polygon)]
 
 def find_intersecting_polygons(polygons, line):
     """Определить все полигоны, которые пересекает прямая AB."""
@@ -218,11 +214,29 @@ def read_polygons_from_file(file_name):
     return polygons
 
 
+def to_optimize(coords, position, polygons, count):
+    if position > 0:
+        prev_point = Point(coords[position-1])
+        next_point = Point(coords[position+1])
+        new_segment = LineString([prev_point, next_point])
+        
+        if find_intersecting_polygons(polygons, new_segment) == []:
+            new_coords = coords.copy()
+            new_coords.remove(new_coords[position])
+            
+            (new_coords, count) = to_optimize(new_coords, position-1, polygons, count=count+1)
+            return (new_coords, count)
+            result = (LineString(new_coords), position)
+
+    return (coords, count)
+
 def SplitLine(polygons, line, position, visited_polygons=[]):
     global reached, splitLines
     #draw_polygons(polygons, line)
     
     coords = list(line.coords)
+
+    vpolygons = visited_polygons.copy()
     
     start_point = Point(coords[position])
     segment = LineString(coords[position:position+2])
@@ -235,36 +249,45 @@ def SplitLine(polygons, line, position, visited_polygons=[]):
         p = find_edge_points(closest_polygon, segment)
         #print(f"\n\nEdge Points:\n{p[0]}, {p[1]}")
 
-        if not any(_polygon == closest_polygon for _polygon, i in visited_polygons):
+        if not any(_polygon == closest_polygon for _polygon, i in vpolygons):
             cond = (0, 2)
         else:
-            side = [i for _polygon, i in visited_polygons if _polygon == closest_polygon]
+            side = [i for _polygon, i in vpolygons if _polygon == closest_polygon]
             cond = (side[0], side[0]+1)
 
         for i in range(*cond):
-            if closest_polygon not in visited_polygons:
-                reached = False
+            #if not any(_polygon == closest_polygon for _polygon, i in visited_polygons):
+            reached = False
             new_coords = coords.copy()
 
             new_coords.insert(position+1, p[i])
 
             line = LineString(new_coords)
-            #draw_polygons(polygons, [line])
+            draw_polygons(polygons, [line])
 
-            index = next((index for index, (p, _) in enumerate(visited_polygons) if p == closest_polygon), None)
+            index = next((index for index, (p, _) in enumerate(vpolygons) if p == closest_polygon), None)
+
 
             # Если кортеж найден, обновляем его значение i
             if index is not None:
-                visited_polygons[index] = (closest_polygon, i)
+                vpolygons[index] = (closest_polygon, i)
             else:
                 # Если кортеж не найден, добавляем новый кортеж
-                visited_polygons.append((closest_polygon, i))
+                vpolygons.append((closest_polygon, i))
 
-            line = SplitLine(polygons, line, position, visited_polygons)
-        
+            line = SplitLine(polygons, line, position, vpolygons)
+    elif position > 0:
+        (new_coords, count) = to_optimize(coords, position, polygons, 0)
+        line = LineString(new_coords)
+        position = position-count
+        if count > 0:
+            draw_polygons(polygons, [line])
+
+
+
     #draw_polygons(polygons, [line])    
     if position + 1 != len(line.coords) - 1 and not reached:
-        line = SplitLine(polygons, line, position+1, visited_polygons)
+        line = SplitLine(polygons, line, position+1, vpolygons)
     if not reached:
         splitLines.append(line)
         reached = True
@@ -273,41 +296,15 @@ def SplitLine(polygons, line, position, visited_polygons=[]):
 
 
 
-def can_remove_point(polygons, line, index):
-    # Создаем линию из первой и третьей точек
-    new_line = LineString([line.coords[index], line.coords[index + 2]])
-    # Проверяем пересечение с каждым полигоном
-    for poly in polygons:
-        if new_line.intersects(poly):
-            return False
-    return True
-
-def simplify_linestring(polygons, linestring):
-    coords = list(linestring.coords)
-    i = 0
-    while i < len(coords) - 2:
-        # Проверяем, можно ли удалить вторую точку
-        if can_remove_point(polygons, linestring, i):
-            # Удаляем вторую точку
-            del coords[i + 1]
-            # Не увеличиваем i, так как следующая точка стала второй
-        else:
-            # Переходим к следующей тройке точек
-            i += 1
-    return LineString(coords)
-
-
-
-
 
 # Initialization
-n = 10000  # Количество точек
+n = 1000  # Количество точек
 h = 100    # Количество полигонов
-x_range = (0, 10000)  # Диапазон по оси X
-y_range = (0, 10000)  # Диапазон по оси Y
+x_range = (0, 1000)  # Диапазон по оси X
+y_range = (0, 1000)  # Диапазон по оси Y
 
 A = Point(-10, -10)
-B = Point(10010, 10010)
+B = Point(1010, 1010)
 line = LineString([A, B])
 
 
@@ -317,17 +314,35 @@ line = LineString([A, B])
 points = generate_random_points(n, x_range, y_range)
 
 reached = False
-polygons = cluster_points_to_polygons(points, h)#read_polygons_from_file('polygon.txt')#
 
+############################
+start_time = time.time()
+polygons = read_polygons_from_file('polygon.txt')#cluster_points_to_polygons(points, h)#
+#save_polygons_to_txt(polygons, 'polygon.txt')
+end_time = time.time()
 
-draw_polygon(polygons)
+execution_time = end_time - start_time
+print(f"Polygons are built in: {execution_time} seconds")
+###########################
+draw_polygon(polygons, line)
 
 G = nx.Graph()
 splitLines = []
+###########################
+start_time = time.time()
 splitLine = SplitLine(polygons, line, 0)
+end_time = time.time()
 
+execution_time = end_time - start_time
+print(f"Paths are found in: {execution_time} seconds")
+###########################
+start_time = time.time()
 shortest_line = min(splitLines, key=lambda line: line.length)
+end_time = time.time()
 
+execution_time = end_time - start_time
+print(f"The shortest path is found in: {execution_time} seconds")
+###########################
 #closest_polygon = min(polygons, key=lambda polygon: start_point.distance(polygon))
 
 #draw_polygons([closest_polygon], line)
