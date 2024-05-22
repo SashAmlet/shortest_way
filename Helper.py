@@ -8,6 +8,7 @@ from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 from shapely.wkt import loads
+import time
 
 
 class Random:
@@ -34,6 +35,7 @@ class Random:
             hull = ConvexHull(cluster_points)
             # Створення полігону з опуклої оболонки точок кластера
             polygons.append(Polygon(cluster_points[hull.vertices]))
+            number_of_points = len(polygons[0].exterior.coords)
 
         return polygons
     
@@ -87,3 +89,13 @@ class File:
                     polygon = loads(line)
                     polygons.append(polygon)
         return polygons
+    
+
+# def timeit(func):
+#     def wrapper(*args, **kwargs):
+#         start_time = time.time()
+#         result = func(*args, **kwargs)
+#         end_time = time.time()
+#         print(f"{func.__name__} выполнена за: {end_time - start_time} секунд")
+#         return result
+#     return wrapper
